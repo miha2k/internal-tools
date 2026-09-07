@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:push": "drizzle-kit push && tsx src/lib/db/setup-triggers.ts",
+    "db:studio": "drizzle-kit studio",
+    "seed": "tsx src/lib/db/seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -24,13 +27,14 @@
   "devDependencies": {
     "@faker-js/faker": "^10.6.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.43",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }
