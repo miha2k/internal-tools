@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { testDb, setupTestDb, cleanupTestDb } from '../test-setup';
-import { approvals, transactions, auditLog } from '../db/schema';
+import { approvals, refunds, auditLog } from '../db/schema';
 import { eq } from 'drizzle-orm';
-import { transactionsApp } from '../../apps/transactions.app';
+import { refundsApp } from '../../apps/refunds.app';
 
 describe('requiresApproval', () => {
   beforeEach(async () => {
@@ -14,44 +14,46 @@ describe('requiresApproval', () => {
   });
 
   it('action whose requiresApproval predicate returns true creates pending approval and does NOT mutate underlying row', async () => {
-    const recordId = 'txn-1';
+    const recordId = 'refund-1';
     const userId = 'user-1';
     
-    // Insert a transaction with amount > 5000 (requires approval)
-    await testDb.insert(transactions).values({
+    // Insert a refund with amount > 500 (requires approval)
+    await testDb.insert(refunds).values({
       id: recordId,
-      customerId: 'cust-1',
-      amount: 10000, // $100.00 (over $50 threshold)
+      orderId: 'ORD-123',
+      customerEmail: 'customer@example.com',
+      amount: 600, // $6.00 (over $5.00 threshold)
       currency: 'USD',
-      status: 'completed',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      reason: 'Product defect',
+      status: 'pending',
+      requestedAt: Date.now(),
+      requestedBy: 'agent-1',
     });
 
-    // Get the refund action from the app config
-    const refundAction = transactionsApp.rowActions.find(a => a.key === 'refund');
-    expect(refundAction).toBeDefined();
+    // Get the approve action from the app config
+    const approveAction = refundsApp.rowActions.find(a => a.key === 'approve');
+    expect(approveAction).toBeDefined();
     
     // Simulate the requiresApproval check
-    const [transaction] = await testDb
+    const [refund] = await testDb
       .select()
-      .from(transactions)
-      .where(eq(transactions.id, recordId));
+      .from(refunds)
+      .where(eq(refunds.id, recordId));
     
-    const requiresApproval = typeof refundAction!.requiresApproval === 'function'
-      ? refundAction!.requiresApproval(transaction)
-      : refundAction!.requiresApproval;
+    const requiresApproval = typeof approveAction!.requiresApproval === 'function'
+      ? approveAction!.requiresApproval(refund as any)
+      : approveAction!.requiresApproval;
     
     expect(requiresApproval).toBe(true);
     
     // When requiresApproval is true, create a pending approval instead of mutating
     const approvalId = await testDb.insert(approvals).values({
       requesterId: userId,
-      app: transactionsApp.slug,
+      app: refundsApp.slug,
       recordId: recordId,
-      action: 'refund',
-      before: JSON.stringify(transaction),
-      after: JSON.stringify({ ...transaction, status: 'refunded' }),
+      action: 'approve',
+      before: JSON.stringify(refund),
+      after: JSON.stringify({ ...refund, status: 'approved' }),
       status: 'pending',
       createdAt: Date.now(),
     }).returning({ id: approvals.id }).then(rows => rows[0].id);
@@ -66,13 +68,13 @@ describe('requiresApproval', () => {
     expect(approval.status).toBe('pending');
     expect(approval.requesterId).toBe(userId);
     
-    // Verify the underlying transaction was NOT mutated
-    const [unchangedTransaction] = await testDb
+    // Verify the underlying refund was NOT mutated
+    const [unchangedRefund] = await testDb
       .select()
-      .from(transactions)
-      .where(eq(transactions.id, recordId));
+      .from(refunds)
+      .where(eq(refunds.id, recordId));
     
-    expect(unchangedTransaction.status).toBe('completed'); // Still original status
+    expect(unchangedRefund.status).toBe('pending'); // Still original status
     
     // Verify no audit log was written for the mutation (since it didn't happen)
     const auditRows = await testDb
@@ -84,33 +86,35 @@ describe('requiresApproval', () => {
   });
 
   it('action whose requiresApproval predicate returns false mutates directly', async () => {
-    const recordId = 'txn-2';
+    const recordId = 'refund-2';
     const userId = 'user-1';
     
-    // Insert a transaction with amount <= 5000 (does not require approval)
-    await testDb.insert(transactions).values({
+    // Insert a refund with amount <= 500 (does not require approval)
+    await testDb.insert(refunds).values({
       id: recordId,
-      customerId: 'cust-1',
-      amount: 3000, // $30.00 (under $50 threshold)
+      orderId: 'ORD-456',
+      customerEmail: 'customer@example.com',
+      amount: 400, // $4.00 (under $5.00 threshold)
       currency: 'USD',
-      status: 'completed',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      reason: 'Product defect',
+      status: 'pending',
+      requestedAt: Date.now(),
+      requestedBy: 'agent-1',
     });
 
-    // Get the refund action from the app config
-    const refundAction = transactionsApp.rowActions.find(a => a.key === 'refund');
-    expect(refundAction).toBeDefined();
+    // Get the approve action from the app config
+    const approveAction = refundsApp.rowActions.find(a => a.key === 'approve');
+    expect(approveAction).toBeDefined();
     
     // Simulate the requiresApproval check
-    const [transaction] = await testDb
+    const [refund] = await testDb
       .select()
-      .from(transactions)
-      .where(eq(transactions.id, recordId));
+      .from(refunds)
+      .where(eq(refunds.id, recordId));
     
-    const requiresApproval = typeof refundAction!.requiresApproval === 'function'
-      ? refundAction!.requiresApproval(transaction)
-      : refundAction!.requiresApproval;
+    const requiresApproval = typeof approveAction!.requiresApproval === 'function'
+      ? approveAction!.requiresApproval(refund as any)
+      : approveAction!.requiresApproval;
     
     expect(requiresApproval).toBe(false);
     
@@ -118,24 +122,24 @@ describe('requiresApproval', () => {
     await testDb.transaction(async (tx) => {
       const [before] = await tx
         .select()
-        .from(transactions)
-        .where(eq(transactions.id, recordId));
+        .from(refunds)
+        .where(eq(refunds.id, recordId));
       
       await tx
-        .update(transactions)
-        .set({ status: 'refunded', updatedAt: Date.now() })
-        .where(eq(transactions.id, recordId));
+        .update(refunds)
+        .set({ status: 'approved' })
+        .where(eq(refunds.id, recordId));
       
       const [after] = await tx
         .select()
-        .from(transactions)
-        .where(eq(transactions.id, recordId));
+        .from(refunds)
+        .where(eq(refunds.id, recordId));
       
       // Write audit log
       await tx.insert(auditLog).values({
         actor: userId,
-        action: 'refund',
-        app: transactionsApp.slug,
+        action: 'approve',
+        app: refundsApp.slug,
         recordId: String(recordId),
         before: JSON.stringify(before),
         after: JSON.stringify(after),
@@ -144,13 +148,13 @@ describe('requiresApproval', () => {
       });
     });
     
-    // Verify the transaction was mutated
-    const [mutatedTransaction] = await testDb
+    // Verify the refund was mutated
+    const [mutatedRefund] = await testDb
       .select()
-      .from(transactions)
-      .where(eq(transactions.id, recordId));
+      .from(refunds)
+      .where(eq(refunds.id, recordId));
     
-    expect(mutatedTransaction.status).toBe('refunded');
+    expect(mutatedRefund.status).toBe('approved');
     
     // Verify audit log was written
     const auditRows = await testDb
@@ -159,6 +163,6 @@ describe('requiresApproval', () => {
       .where(eq(auditLog.recordId, recordId));
     
     expect(auditRows).toHaveLength(1);
-    expect(auditRows[0].action).toBe('refund');
+    expect(auditRows[0].action).toBe('approve');
   });
 });

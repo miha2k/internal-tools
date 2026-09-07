@@ -14,7 +14,10 @@ async function setupTriggers() {
   );
   
   // Use executeMultiple to run both trigger statements
-  await client.executeMultiple(triggerSql.split(';').filter(stmt => stmt.trim()));
+  const statements = triggerSql.split(';').filter(stmt => stmt.trim());
+  for (const stmt of statements) {
+    await client.execute(stmt);
+  }
   console.log('Triggers setup successfully');
 }
 

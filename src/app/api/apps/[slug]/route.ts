@@ -4,13 +4,15 @@ import { getCurrentUser } from '@/lib/auth/server';
 import { assertCan } from '@/lib/auth/rbac';
 import { getAppBySlug } from '@/lib/registry';
 import { desc, asc, eq, and, or, like } from 'drizzle-orm';
+import { mutate } from '@/lib/audit/mutate';
 
 export async function GET(
   request: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const app = getAppBySlug(params.slug);
+    const { slug } = await params;
+    const app = getAppBySlug(slug);
     if (!app) {
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
@@ -27,6 +29,7 @@ export async function GET(
     const revealPII = searchParams.get('reveal_pii') === 'true';
 
     // Build base query
+    // @ts-ignore - dynamic schema access
     let query = db.select().from(app.schema);
 
     // Apply search
@@ -67,6 +70,7 @@ export async function GET(
 
     // Apply pagination
     const offset = (page - 1) * limit;
+    // @ts-ignore - dynamic query chaining
     query = query.limit(limit).offset(offset);
 
     const data = await query;
@@ -107,10 +111,11 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const app = getAppBySlug(params.slug);
+    const { slug } = await params;
+    const app = getAppBySlug(slug);
     if (!app) {
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
@@ -169,12 +174,39 @@ export async function POST(
       return NextResponse.json({ approvalId, requiresApproval: true });
     }
 
-    // Execute action directly (this would need to be implemented per action)
-    // For now, return a placeholder response
+    // Execute action directly through mutate()
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const result = await mutate(
+      { user, ip },
+      {
+        app: app.slug,
+        action,
+        recordId,
+        run: async (tx) => {
+          // Apply the input fields to the record
+          const updates = { ...record, ...inputFields };
+          
+          // @ts-ignore - dynamic table access
+          await tx
+            .update(app.schema)
+            .set(updates)
+            // @ts-ignore - dynamic column access
+            .where(eq(app.schema.id, recordId));
+
+          return {
+            before: record,
+            after: updates,
+            result: undefined,
+          };
+        },
+      }
+    );
+
     return NextResponse.json({ 
       message: 'Action executed',
       action,
-      recordId 
+      recordId,
+      result 
     });
   } catch (error) {
     console.error('Error executing action:', error);

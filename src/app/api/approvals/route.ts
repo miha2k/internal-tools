@@ -30,11 +30,42 @@ export async function GET(request: Request) {
       .where(eq(approvals.status, 'pending'))
       .orderBy(desc(approvals.createdAt));
 
-    const approvalsWithDetails = pendingApprovals.map(approval => ({
-      ...approval,
-      before: approval.before ? JSON.parse(approval.before as string) : null,
-      after: approval.after ? JSON.parse(approval.after as string) : null,
-    }));
+    const approvalsWithDetails = await Promise.all(
+      pendingApprovals.map(async (approval) => {
+        const app = getAppBySlug(approval.app);
+        if (!app) {
+          return {
+            ...approval,
+            before: approval.before ? JSON.parse(approval.before as string) : null,
+            after: approval.after ? JSON.parse(approval.after as string) : null,
+          };
+        }
+
+        // Authorize user to view approvals for this app
+        assertCan(user, 'view', app);
+
+        const before = approval.before ? JSON.parse(approval.before as string) : null;
+        const after = approval.after ? JSON.parse(approval.after as string) : null;
+
+        // Mask PII columns in before/after
+        const maskPII = (data: any) => {
+          if (!data) return data;
+          const masked = { ...data };
+          app.columns.forEach(column => {
+            if (column.pii && column.key in masked) {
+              masked[column.key] = '••••••••';
+            }
+          });
+          return masked;
+        };
+
+        return {
+          ...approval,
+          before: maskPII(before),
+          after: maskPII(after),
+        };
+      })
+    );
 
     return NextResponse.json({ 
       approvals: approvalsWithDetails,

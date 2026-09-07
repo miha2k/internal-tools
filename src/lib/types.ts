@@ -2,7 +2,7 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 
 type ColumnType = 'text' | 'number' | 'currency' | 'date' | 'enum' | 'boolean';
 type SemanticTone = 'neutral' | 'positive' | 'warning' | 'critical';
-type ActionVariant = 'primary' | 'destructive' | 'secondary' | 'outline';
+type ActionVariant = 'default' | 'destructive' | 'secondary' | 'outline';
 
 // Helper to infer row type from Drizzle table
 type InferRow<TTable extends SQLiteTable> = TTable extends { $inferSelect: infer T } 

@@ -101,7 +101,7 @@ export default function AppPage() {
       case 'currency':
         return `$${(value / 100).toFixed(2)}`;
       case 'enum':
-        const option = column.enumOptions?.find(opt => opt.value === value);
+        const option = column.enumOptions?.find((opt: any) => opt.value === value);
         const classes = option ? toneClasses[option.tone] || toneClasses.neutral : null;
         return option ? (
           <Badge variant="outline" className={`${classes?.bg} ${classes?.text}`}>
@@ -111,7 +111,9 @@ export default function AppPage() {
       case 'date':
         return new Date(value).toLocaleDateString();
       case 'boolean':
-        return value ? 'Yes' : 'No';
+        // Handle SQLite 0/1 stored as numbers
+        const boolValue = typeof value === 'number' ? value === 1 : value;
+        return boolValue ? 'Yes' : 'No';
       case 'text':
       default:
         if (column.pii) {

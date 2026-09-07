@@ -96,6 +96,16 @@ export async function approveApproval(
           throw new Error('Self-approval is not allowed');
         }
 
+        // Apply the approved changes to the underlying record
+        const after = JSON.parse(approval.after as string);
+        
+        // @ts-ignore - dynamic table access
+        await tx
+          .update(app.schema)
+          .set(after)
+          // @ts-ignore - dynamic column access
+          .where(eq(app.schema.id, approval.recordId));
+
         await tx
           .update(approvals)
           .set({
