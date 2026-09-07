@@ -17,6 +17,7 @@ describe('assertCan', () => {
       view: ['viewer', 'operator', 'approver', 'admin'],
       act: ['operator', 'approver', 'admin'],
       approve: ['approver', 'admin'],
+      reveal_pii: ['operator', 'approver', 'admin'],
     },
     viewState: {
       defaultSort: { column: 'id', direction: 'asc' },

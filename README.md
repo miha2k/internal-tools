@@ -41,7 +41,7 @@ npm install
 npm run db:push
 ```
 
-This creates the database schema and sets up SQLite triggers for audit log append-only enforcement.
+This creates the database schema and sets up SQLite triggers for audit log append-only enforcement. The triggers are automatically created as part of the database push process.
 
 ### Seed Data
 

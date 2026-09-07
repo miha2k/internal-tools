@@ -28,11 +28,23 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<{ id: string; name: string; role: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
   const allUsers = getAllUsers();
 
   useEffect(() => {
     fetchCurrentUser();
-  }, []);
+    fetchPendingCount();
+
+    // Listen for approval updates
+    const handleApprovalsUpdate = () => {
+      fetchPendingCount();
+    };
+
+    window.addEventListener('approvals-updated', handleApprovalsUpdate);
+    return () => {
+      window.removeEventListener('approvals-updated', handleApprovalsUpdate);
+    };
+  }, [pathname]); // Refresh pending count when navigating
 
   const fetchCurrentUser = async () => {
     try {
@@ -46,6 +58,16 @@ export function AppShell({ children }: AppShellProps) {
     }
   };
 
+  const fetchPendingCount = async () => {
+    try {
+      const response = await fetch('/api/approvals');
+      const result = await response.json();
+      setPendingCount(result.count || 0);
+    } catch (error) {
+      console.error('Failed to fetch pending count:', error);
+    }
+  };
+
   const handleUserSwitch = async (userId: string) => {
     try {
       await fetch('/api/switch-user', {
@@ -54,7 +76,7 @@ export function AppShell({ children }: AppShellProps) {
         body: JSON.stringify({ userId }),
       });
       
-      // Refresh the page to get the new user
+      // Refresh the page to get the new user and pending count
       window.location.reload();
     } catch (error) {
       console.error('Failed to switch user:', error);
@@ -103,13 +125,18 @@ export function AppShell({ children }: AppShellProps) {
               >
                 <Shield className="mr-2 h-4 w-4" />
                 Approvals
+                {pendingCount > 0 && (
+                  <Badge variant="secondary" className="ml-auto">
+                    {pendingCount}
+                  </Badge>
+                )}
               </Button>
             </Link>
             
             {appRegistry.map((app) => (
-              <Link key={app.slug} href={`/${app.slug}`}>
+              <Link key={app.slug} href={`/app/${app.slug}`}>
                 <Button
-                  variant={pathname === `/${app.slug}` ? 'secondary' : 'ghost'}
+                  variant={pathname === `/app/${app.slug}` ? 'secondary' : 'ghost'}
                   className="w-full justify-start"
                 >
                   <ChevronRight className="mr-2 h-4 w-4" />

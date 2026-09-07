@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Clock, User } from 'lucide-react';
+import { Clock, User, Eye } from 'lucide-react';
 import type { AppConfig } from '@/lib/types';
 
 interface DetailDrawerProps {
@@ -25,10 +25,13 @@ interface DetailDrawerProps {
 export function DetailDrawer({ open, onOpenChange, app, record }: DetailDrawerProps) {
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [revealedFields, setRevealedFields] = useState<Set<string>>(new Set());
+  const [revealing, setRevealing] = useState(false);
 
   useEffect(() => {
     if (open && record) {
       fetchAuditLog();
+      setRevealedFields(new Set()); // Reset revealed state when opening
     }
   }, [open, record]);
 
@@ -61,11 +64,54 @@ export function DetailDrawer({ open, onOpenChange, app, record }: DetailDrawerPr
     }
   };
 
+  const handleRevealPII = async (fieldKey: string) => {
+    try {
+      setRevealing(true);
+      await fetch('/api/reveal-pii', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app: app.slug,
+          recordId: record[app.titleField],
+        }),
+      });
+      setRevealedFields(prev => new Set([...prev, fieldKey]));
+    } catch (error) {
+      console.error('Failed to reveal PII:', error);
+    } finally {
+      setRevealing(false);
+    }
+  };
+
   const renderFieldValue = (key: string, value: any) => {
     const column = app.columns.find(col => col.key === key);
     
+    // Static tone-to-class mapping for Tailwind
+    const toneClasses: Record<string, { bg: string; text: string }> = {
+      neutral: { bg: 'bg-gray-500/10', text: 'text-gray-500' },
+      positive: { bg: 'bg-green-500/10', text: 'text-green-500' },
+      warning: { bg: 'bg-yellow-500/10', text: 'text-yellow-500' },
+      critical: { bg: 'bg-red-500/10', text: 'text-red-500' },
+    };
+    
     if (column?.pii) {
-      return '••••••••';
+      if (revealedFields.has(key)) {
+        return value;
+      }
+      return (
+        <div className="flex items-center gap-2">
+          <span>••••••••</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2"
+            onClick={() => handleRevealPII(key)}
+            disabled={revealing}
+          >
+            <Eye className="h-3 w-3" />
+          </Button>
+        </div>
+      );
     }
 
     switch (column?.type) {
@@ -75,8 +121,9 @@ export function DetailDrawer({ open, onOpenChange, app, record }: DetailDrawerPr
         return new Date(value).toLocaleString();
       case 'enum':
         const option = column.enumOptions?.find(opt => opt.value === value);
+        const classes = option ? toneClasses[option.tone] || toneClasses.neutral : null;
         return option ? (
-          <Badge variant="outline" className={`bg-${option.tone}-500/10 text-${option.tone}-500`}>
+          <Badge variant="outline" className={`${classes?.bg} ${classes?.text}`}>
             {option.label}
           </Badge>
         ) : value;

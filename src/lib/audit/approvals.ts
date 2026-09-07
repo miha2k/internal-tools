@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { User } from '../auth';
 import { assertCan } from '../auth/rbac';
 import type { AppConfig } from '../types';
+import { mutate } from './mutate';
 
 export interface ApprovalRequest {
   requesterId: string;
@@ -19,20 +20,36 @@ export interface ApprovalRequest {
  * This is used when an action requires approval.
  */
 export async function createApproval(
-  request: ApprovalRequest
+  request: ApprovalRequest,
+  user: User,
+  ip: string
 ): Promise<number> {
-  const [result] = await db.insert(approvals).values({
-    requesterId: request.requesterId,
-    app: request.app,
-    recordId: String(request.recordId),
-    action: request.action,
-    before: JSON.stringify(request.before),
-    after: JSON.stringify(request.after),
-    status: 'pending',
-    createdAt: Date.now(),
-  }).returning({ id: approvals.id });
+  return mutate(
+    { user, ip },
+    {
+      app: request.app,
+      action: 'create_approval',
+      recordId: `approval-${Date.now()}`,
+      run: async (tx) => {
+        const [result] = await tx.insert(approvals).values({
+          requesterId: request.requesterId,
+          app: request.app,
+          recordId: String(request.recordId),
+          action: request.action,
+          before: JSON.stringify(request.before),
+          after: JSON.stringify(request.after),
+          status: 'pending',
+          createdAt: Date.now(),
+        }).returning({ id: approvals.id });
 
-  return result.id;
+        return {
+          before: null,
+          after: { approvalId: result.id },
+          result: result.id,
+        };
+      },
+    }
+  );
 }
 
 /**
@@ -49,36 +66,53 @@ export async function getPendingApprovals(approverId: string) {
 export async function approveApproval(
   approvalId: number,
   approver: User,
-  app: AppConfig
+  app: AppConfig,
+  ip: string
 ): Promise<void> {
   assertCan(approver, 'approve', app);
 
-  const [approval] = await db
-    .select()
-    .from(approvals)
-    .where(eq(approvals.id, approvalId));
+  await mutate(
+    { user: approver, ip },
+    {
+      app: app.slug,
+      action: 'approve',
+      recordId: approvalId,
+      run: async (tx) => {
+        const [approval] = await tx
+          .select()
+          .from(approvals)
+          .where(eq(approvals.id, approvalId));
 
-  if (!approval) {
-    throw new Error('Approval not found');
-  }
+        if (!approval) {
+          throw new Error('Approval not found');
+        }
 
-  if (approval.status !== 'pending') {
-    throw new Error('Approval is not pending');
-  }
+        if (approval.status !== 'pending') {
+          throw new Error('Approval is not pending');
+        }
 
-  // Self-approval check
-  if (approval.requesterId === approver.id) {
-    throw new Error('Self-approval is not allowed');
-  }
+        // Self-approval check
+        if (approval.requesterId === approver.id) {
+          throw new Error('Self-approval is not allowed');
+        }
 
-  await db
-    .update(approvals)
-    .set({
-      status: 'approved',
-      approverId: approver.id,
-      decidedAt: Date.now(),
-    })
-    .where(eq(approvals.id, approvalId));
+        await tx
+          .update(approvals)
+          .set({
+            status: 'approved',
+            approverId: approver.id,
+            decidedAt: Date.now(),
+          })
+          .where(eq(approvals.id, approvalId));
+
+        return {
+          before: { status: approval.status },
+          after: { status: 'approved', approverId: approver.id },
+          result: undefined,
+        };
+      },
+    }
+  );
 }
 
 /**
@@ -87,29 +121,46 @@ export async function approveApproval(
 export async function rejectApproval(
   approvalId: number,
   approver: User,
-  app: AppConfig
+  app: AppConfig,
+  ip: string
 ): Promise<void> {
   assertCan(approver, 'approve', app);
 
-  const [approval] = await db
-    .select()
-    .from(approvals)
-    .where(eq(approvals.id, approvalId));
+  await mutate(
+    { user: approver, ip },
+    {
+      app: app.slug,
+      action: 'reject',
+      recordId: approvalId,
+      run: async (tx) => {
+        const [approval] = await tx
+          .select()
+          .from(approvals)
+          .where(eq(approvals.id, approvalId));
 
-  if (!approval) {
-    throw new Error('Approval not found');
-  }
+        if (!approval) {
+          throw new Error('Approval not found');
+        }
 
-  if (approval.status !== 'pending') {
-    throw new Error('Approval is not pending');
-  }
+        if (approval.status !== 'pending') {
+          throw new Error('Approval is not pending');
+        }
 
-  await db
-    .update(approvals)
-    .set({
-      status: 'rejected',
-      approverId: approver.id,
-      decidedAt: Date.now(),
-    })
-    .where(eq(approvals.id, approvalId));
+        await tx
+          .update(approvals)
+          .set({
+            status: 'rejected',
+            approverId: approver.id,
+            decidedAt: Date.now(),
+          })
+          .where(eq(approvals.id, approvalId));
+
+        return {
+          before: { status: approval.status },
+          after: { status: 'rejected', approverId: approver.id },
+          result: undefined,
+        };
+      },
+    }
+  );
 }

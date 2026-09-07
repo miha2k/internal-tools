@@ -103,6 +103,7 @@ export const transactionsApp: AppConfig<typeof transactions> = {
     view: ['viewer', 'operator', 'approver', 'admin'],
     act: ['operator', 'approver', 'admin'],
     approve: ['approver', 'admin'],
+    reveal_pii: ['operator', 'approver', 'admin'],
   },
   viewState: {
     defaultSort: {

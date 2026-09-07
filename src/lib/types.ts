@@ -47,6 +47,7 @@ export interface RoleRequirements {
   view: string[]; // role names
   act: string[];  // role names
   approve: string[]; // role names
+  reveal_pii: string[]; // role names
 }
 
 export interface DefaultViewState {

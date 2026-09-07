@@ -46,3 +46,27 @@ export async function mutate<T>(
     return result;
   });
 }
+
+/**
+ * Reveal PII for a specific record. This is audited.
+ * This function should be called when a user explicitly requests to view PII data.
+ */
+export async function revealPII(
+  ctx: MutationContext,
+  app: string,
+  recordId: string | number
+): Promise<void> {
+  await mutate(ctx, {
+    app,
+    action: 'reveal_pii',
+    recordId,
+    run: async (tx) => {
+      // This doesn't change data, but we want to audit the access
+      return {
+        before: null,
+        after: { revealed: true },
+        result: undefined,
+      };
+    },
+  });
+}

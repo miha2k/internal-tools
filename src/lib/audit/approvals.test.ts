@@ -21,6 +21,7 @@ describe('approvals - self-approval logic', () => {
       view: ['viewer', 'operator', 'approver', 'admin'],
       act: ['operator', 'approver', 'admin'],
       approve: ['approver', 'admin'],
+      reveal_pii: ['operator', 'approver', 'admin'],
     },
     viewState: {
       defaultSort: { column: 'id', direction: 'asc' },
@@ -30,12 +31,14 @@ describe('approvals - self-approval logic', () => {
   let approvalId: number;
   const requesterId = 'user-1';
   const approverId = 'user-2';
+  const testIp = '127.0.0.1';
 
   beforeEach(async () => {
     // Clean up any existing test data
     await db.delete(approvals).where(eq(approvals.app, 'test'));
     
     // Create a test approval
+    const requester: User = { id: requesterId, role: 'operator' };
     approvalId = await createApproval({
       requesterId,
       app: 'test',
@@ -43,7 +46,7 @@ describe('approvals - self-approval logic', () => {
       action: 'refund',
       before: { status: 'completed' },
       after: { status: 'refunded' },
-    });
+    }, requester, testIp);
   });
 
   afterEach(async () => {
@@ -55,7 +58,7 @@ describe('approvals - self-approval logic', () => {
     const requester: User = { id: requesterId, role: 'approver' };
     
     await expect(
-      approveApproval(approvalId, requester, mockApp)
+      approveApproval(approvalId, requester, mockApp, testIp)
     ).rejects.toThrow('Self-approval is not allowed');
   });
 
@@ -63,7 +66,7 @@ describe('approvals - self-approval logic', () => {
     const approver: User = { id: approverId, role: 'approver' };
     
     await expect(
-      approveApproval(approvalId, approver, mockApp)
+      approveApproval(approvalId, approver, mockApp, testIp)
     ).resolves.not.toThrow();
     
     const [updated] = await db

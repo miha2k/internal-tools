@@ -1,8 +1,9 @@
-import { transactionsApp } from '../apps/transactions.app';
 import type { AppConfig } from './types';
+import { transactionsApp } from '../apps/transactions.app';
 
-// App registry - this is where all apps are registered
-// Adding a new app is as simple as importing and adding to this array
+// App registry - manually maintained for now
+// To add a new app: import it here and add to the array
+// TODO: Make this automatic via glob imports when build system supports it
 export const appRegistry: AppConfig[] = [
   transactionsApp,
 ];
