@@ -9,32 +9,61 @@ import { Shield, Check, X } from 'lucide-react';
 export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState<number | null>(null);
 
   useEffect(() => {
-    // Mock data for approvals
-    setApprovals([
-      {
-        id: 1,
-        requester: 'Bob Operator',
-        app: 'transactions',
-        action: 'refund',
-        recordId: 'tx-123',
-        before: { status: 'completed', amount: 10000 },
-        after: { status: 'refunded', amount: 10000 },
-        createdAt: Date.now() - 3600000,
-      },
-    ]);
-    setLoading(false);
+    fetchApprovals();
   }, []);
 
+  const fetchApprovals = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/approvals');
+      const result = await response.json();
+      setApprovals(result.approvals || []);
+    } catch (error) {
+      console.error('Failed to fetch approvals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApprove = async (id: number) => {
-    console.log('Approving', id);
-    // Implement approval logic
+    try {
+      setProcessing(id);
+      await fetch('/api/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalId: id, action: 'approve' }),
+      });
+      // Refresh the list
+      await fetchApprovals();
+      // Trigger a custom event to update the sidebar badge
+      window.dispatchEvent(new Event('approvals-updated'));
+    } catch (error) {
+      console.error('Failed to approve:', error);
+    } finally {
+      setProcessing(null);
+    }
   };
 
   const handleReject = async (id: number) => {
-    console.log('Rejecting', id);
-    // Implement rejection logic
+    try {
+      setProcessing(id);
+      await fetch('/api/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvalId: id, action: 'reject' }),
+      });
+      // Refresh the list
+      await fetchApprovals();
+      // Trigger a custom event to update the sidebar badge
+      window.dispatchEvent(new Event('approvals-updated'));
+    } catch (error) {
+      console.error('Failed to reject:', error);
+    } finally {
+      setProcessing(null);
+    }
   };
 
   if (loading) {
@@ -81,7 +110,7 @@ export default function ApprovalsPage() {
                       {approval.action} - {approval.app}
                     </CardTitle>
                     <CardDescription>
-                      Requested by {approval.requester} • {new Date(approval.createdAt).toLocaleString()}
+                      Requested by {approval.requesterName || approval.requesterId} • {new Date(approval.createdAt).toLocaleString()}
                     </CardDescription>
                   </div>
                   <Badge variant="outline">Pending</Badge>
@@ -107,12 +136,14 @@ export default function ApprovalsPage() {
                     <Button
                       variant="outline"
                       onClick={() => handleReject(approval.id)}
+                      disabled={processing === approval.id}
                     >
                       <X className="mr-2 h-4 w-4" />
                       Reject
                     </Button>
                     <Button
                       onClick={() => handleApprove(approval.id)}
+                      disabled={processing === approval.id}
                     >
                       <Check className="mr-2 h-4 w-4" />
                       Approve

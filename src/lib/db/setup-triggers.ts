@@ -13,8 +13,15 @@ async function setupTriggers() {
     'utf-8'
   );
   
-  await client.execute(triggerSql);
+  // Use executeMultiple to run both trigger statements
+  const statements = triggerSql.split(';').filter(stmt => stmt.trim());
+  for (const stmt of statements) {
+    await client.execute(stmt);
+  }
   console.log('Triggers setup successfully');
 }
 
-setupTriggers().catch(console.error);
+setupTriggers().catch((error) => {
+  console.error('Failed to setup triggers:', error);
+  process.exit(1);
+});

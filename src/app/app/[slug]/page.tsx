@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { transactionsApp } from '@/apps/transactions.app';
+import { useParams, notFound } from 'next/navigation';
+import { getAppBySlug } from '@/lib/registry';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -15,14 +16,23 @@ import {
 } from '@/components/ui/table';
 import { DetailDrawer } from '@/components/DetailDrawer';
 import { Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import type { AppConfig } from '@/lib/types';
 
-export default function TransactionsPage() {
+export default function AppPage() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const app = getAppBySlug(slug);
+
+  if (!app) {
+    notFound();
+  }
+
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sortColumn, setSortColumn] = useState(transactionsApp.viewState.defaultSort.column);
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(transactionsApp.viewState.defaultSort.direction);
-  const [filters, setFilters] = useState<Record<string, string>>(transactionsApp.viewState.defaultFilters as Record<string, string> || {});
+  const [sortColumn, setSortColumn] = useState(app.viewState.defaultSort.column);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(app.viewState.defaultSort.direction);
+  const [filters, setFilters] = useState<Record<string, string>>((app.viewState.defaultFilters as Record<string, string>) || {});
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -42,11 +52,17 @@ export default function TransactionsPage() {
         params.append('search', search);
       }
 
-      const response = await fetch(`/api/transactions?${params}`);
+      const response = await fetch(`/api/apps/${app.slug}?${params}`);
       const result = await response.json();
-      setData(result.data);
+      if (!response.ok) {
+        console.error('API error:', result);
+        setData([]);
+      } else {
+        setData(result.data || []);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -54,7 +70,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [search, sortColumn, sortDirection, filters]);
+  }, [search, sortColumn, sortDirection, filters, app.slug]);
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -73,20 +89,31 @@ export default function TransactionsPage() {
   const renderCell = (row: any, column: any) => {
     const value = row[column.key];
 
+    // Static tone-to-class mapping for Tailwind
+    const toneClasses: Record<string, { bg: string; text: string }> = {
+      neutral: { bg: 'bg-gray-500/10', text: 'text-gray-500' },
+      positive: { bg: 'bg-green-500/10', text: 'text-green-500' },
+      warning: { bg: 'bg-yellow-500/10', text: 'text-yellow-500' },
+      critical: { bg: 'bg-red-500/10', text: 'text-red-500' },
+    };
+
     switch (column.type) {
       case 'currency':
         return `$${(value / 100).toFixed(2)}`;
       case 'enum':
-        const option = column.enumOptions?.find(opt => opt.value === value);
+        const option = column.enumOptions?.find((opt: any) => opt.value === value);
+        const classes = option ? toneClasses[option.tone] || toneClasses.neutral : null;
         return option ? (
-          <Badge variant="outline" className={`bg-${option.tone}-500/10 text-${option.tone}-500`}>
+          <Badge variant="outline" className={`${classes?.bg} ${classes?.text}`}>
             {option.label}
           </Badge>
         ) : value;
       case 'date':
         return new Date(value).toLocaleDateString();
       case 'boolean':
-        return value ? 'Yes' : 'No';
+        // Handle SQLite 0/1 stored as numbers
+        const boolValue = typeof value === 'number' ? value === 1 : value;
+        return boolValue ? 'Yes' : 'No';
       case 'text':
       default:
         if (column.pii) {
@@ -112,7 +139,7 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{transactionsApp.title}</h1>
+        <h1 className="text-2xl font-bold">{app.title}</h1>
       </div>
 
       {/* Search and Filters */}
@@ -127,7 +154,7 @@ export default function TransactionsPage() {
           />
         </div>
 
-        {transactionsApp.columns
+        {app.columns
           .filter(col => col.filterable)
           .map(column => (
             <select
@@ -151,7 +178,7 @@ export default function TransactionsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              {transactionsApp.columns.map(column => (
+              {app.columns.map(column => (
                 <TableHead
                   key={column.key as string}
                   className={column.sortable ? 'cursor-pointer hover:bg-muted' : ''}
@@ -167,18 +194,18 @@ export default function TransactionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.length === 0 ? (
+            {!data || data.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={transactionsApp.columns.length + 1} className="text-center py-8">
+                <TableCell colSpan={app.columns.length + 1} className="text-center py-8">
                   <div className="text-muted-foreground">
-                    No transactions found. Try adjusting your filters or search.
+                    No {app.title.toLowerCase()} found. Try adjusting your filters or search.
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              data.map((row) => (
+              (data || []).map((row) => (
                 <TableRow key={row.id}>
-                  {transactionsApp.columns.map(column => (
+                  {app.columns.map(column => (
                     <TableCell key={column.key as string}>
                       {renderCell(row, column)}
                     </TableCell>
@@ -200,7 +227,7 @@ export default function TransactionsPage() {
         <DetailDrawer
           open={drawerOpen}
           onOpenChange={setDrawerOpen}
-          app={transactionsApp}
+          app={app}
           record={selectedRecord}
         />
       )}

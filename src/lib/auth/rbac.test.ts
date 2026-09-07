@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { assertCan } from './rbac';
 import type { AppConfig } from '../types';
-import { transactions } from '../db/schema';
+import { kycReviews } from '../db/schema';
 
 describe('assertCan', () => {
   const mockApp: AppConfig = {
     slug: 'test',
     title: 'Test App',
     tableName: 'test',
-    schema: transactions,
-    titleField: 'id',
+    schema: kycReviews,
+    titleField: 'caseId',
     columns: [],
     rowActions: [],
     detailFields: [],
@@ -17,9 +17,10 @@ describe('assertCan', () => {
       view: ['viewer', 'operator', 'approver', 'admin'],
       act: ['operator', 'approver', 'admin'],
       approve: ['approver', 'admin'],
+      reveal_pii: ['operator', 'approver', 'admin'],
     },
     viewState: {
-      defaultSort: { column: 'id', direction: 'asc' },
+      defaultSort: { column: 'caseId', direction: 'asc' },
     },
   };
 

@@ -15,7 +15,12 @@ describe('PII revelation', () => {
   });
 
   it('revealing a PII column writes an audit row with action reveal_pii', async () => {
-    const user: User = { id: 'user-1', role: 'operator' };
+    const user: User = { 
+      id: 'user-1', 
+      name: 'Test User',
+      email: 'test@example.com',
+      role: 'operator' 
+    };
     const ip = '127.0.0.1';
     const app = 'transactions';
     const recordId = 'txn-1';

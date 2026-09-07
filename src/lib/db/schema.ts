@@ -33,15 +33,41 @@ export const approvals = sqliteTable('approvals', {
   decidedAt: integer('decided_at'),
 });
 
-// Example: Transactions app schema
-export const transactions = sqliteTable('transactions', {
+// KYC Review app schema
+export const kycReviews = sqliteTable('kyc_reviews', {
   id: text('id').primaryKey(),
-  customerId: text('customer_id').notNull(),
+  caseId: text('case_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  country: text('country').notNull(),
+  riskScore: integer('risk_score').notNull(),
+  documentsSubmitted: integer('documents_submitted').notNull(),
+  status: text('status').notNull(), // pending, approved, rejected, escalated
+  submittedAt: integer('submitted_at').notNull(),
+  assignedTo: text('assigned_to'),
+});
+
+// Refunds app schema
+export const refunds = sqliteTable('refunds', {
+  id: text('id').primaryKey(),
+  orderId: text('order_id').notNull(),
+  customerEmail: text('customer_email').notNull(),
   amount: integer('amount').notNull(), // stored in cents
   currency: text('currency').notNull().default('USD'),
-  status: text('status').notNull(), // pending, completed, failed, refunded
+  reason: text('reason'),
+  status: text('status').notNull(), // pending, approved, denied, partial
+  requestedAt: integer('requested_at').notNull(),
+  requestedBy: text('requested_by').notNull(),
+});
+
+// Feature Flags app schema
+export const featureFlags = sqliteTable('feature_flags', {
+  id: text('id').primaryKey(),
+  key: text('key').notNull().unique(),
   description: text('description'),
-  createdAt: integer('created_at').notNull(),
+  environment: text('environment').notNull(), // development, staging, production
+  enabled: integer('enabled').notNull().default(0), // 0 or 1 for boolean
+  rolloutPct: integer('rollout_pct').notNull().default(0),
+  owner: text('owner'),
   updatedAt: integer('updated_at').notNull(),
 });
 
@@ -51,5 +77,9 @@ export type AuditLog = typeof auditLog.$inferSelect;
 export type NewAuditLog = typeof auditLog.$inferInsert;
 export type Approval = typeof approvals.$inferSelect;
 export type NewApproval = typeof approvals.$inferInsert;
-export type Transaction = typeof transactions.$inferSelect;
-export type NewTransaction = typeof transactions.$inferInsert;
+export type KycReview = typeof kycReviews.$inferSelect;
+export type NewKycReview = typeof kycReviews.$inferInsert;
+export type Refund = typeof refunds.$inferSelect;
+export type NewRefund = typeof refunds.$inferInsert;
+export type FeatureFlag = typeof featureFlags.$inferSelect;
+export type NewFeatureFlag = typeof featureFlags.$inferInsert;

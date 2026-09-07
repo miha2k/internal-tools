@@ -7,7 +7,7 @@ interface User {
   role: UserRole;
 }
 
-export type Action = 'view' | 'act' | 'approve';
+export type Action = 'view' | 'act' | 'approve' | 'reveal_pii';
 
 /**
  * Asserts that the user has permission to perform the given action on the app.
