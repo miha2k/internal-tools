@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -166,27 +167,29 @@ export function AppShell({ children }: AppShellProps) {
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {allUsers.map((user) => (
-                <DropdownMenuItem
-                  key={user.id}
-                  onClick={() => handleUserSwitch(user.id)}
-                  className="cursor-pointer"
-                >
-                  <Avatar className="mr-2 h-6 w-6">
-                    <AvatarFallback className={getRoleColor(user.role)}>
-                      {user.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="text-sm">{user.name}</span>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {user.role}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              ))}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Switch Role</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {allUsers.map((user) => (
+                  <DropdownMenuItem
+                    key={user.id}
+                    onClick={() => handleUserSwitch(user.id)}
+                    className="cursor-pointer"
+                  >
+                    <Avatar className="mr-2 h-6 w-6">
+                      <AvatarFallback className={getRoleColor(user.role)}>
+                        {user.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="text-sm">{user.name}</span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {user.role}
+                      </span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

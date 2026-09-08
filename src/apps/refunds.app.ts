@@ -80,12 +80,14 @@ export const refundsApp: AppConfig<typeof refunds> = {
       label: 'Approve',
       variant: 'outline',
       requiresApproval: (row) => row.amount > 500, // Require approval for refunds over $5.00
+      apply: () => ({ status: 'approved' }),
     },
     {
       key: 'deny',
       label: 'Deny',
       variant: 'destructive',
       requiresApproval: (row) => row.amount > 500, // Require approval for refunds over $5.00
+      apply: () => ({ status: 'denied' }),
     },
     {
       key: 'partial_refund',
@@ -100,6 +102,10 @@ export const refundsApp: AppConfig<typeof refunds> = {
           required: true,
         },
       ],
+      apply: (row, inputFields) => ({
+        status: 'partial',
+        amount: inputFields?.amount ?? row.amount,
+      }),
     },
   ],
   detailFields: [

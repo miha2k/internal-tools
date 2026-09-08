@@ -75,18 +75,21 @@ export const kycReviewApp: AppConfig<typeof kycReviews> = {
       label: 'Approve',
       variant: 'default',
       requiresApproval: true, // maker-checker
+      apply: () => ({ status: 'approved' }),
     },
     {
       key: 'reject',
       label: 'Reject',
       variant: 'destructive',
       requiresApproval: true, // maker-checker
+      apply: () => ({ status: 'rejected' }),
     },
     {
       key: 'escalate',
       label: 'Escalate',
       variant: 'secondary',
       requiresApproval: false,
+      apply: () => ({ status: 'escalated' }),
     },
   ],
   detailFields: [

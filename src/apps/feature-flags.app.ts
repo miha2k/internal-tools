@@ -70,6 +70,7 @@ export const featureFlagsApp: AppConfig<typeof featureFlags> = {
       label: 'Toggle',
       variant: 'default',
       requiresApproval: (row) => row.environment === 'production',
+      apply: (row) => ({ enabled: row.enabled ? 0 : 1 }),
     },
     {
       key: 'set_rollout',
@@ -84,6 +85,9 @@ export const featureFlagsApp: AppConfig<typeof featureFlags> = {
           required: true,
         },
       ],
+      apply: (row, inputFields) => ({
+        rolloutPct: inputFields?.rolloutPct ?? row.rolloutPct,
+      }),
     },
   ],
   detailFields: [

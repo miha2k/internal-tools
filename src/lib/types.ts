@@ -36,6 +36,13 @@ export interface RowAction<TTable extends SQLiteTable = any> {
   variant: ActionVariant;
   requiresApproval?: boolean | ((row: InferRow<TTable>) => boolean);
   inputFields?: ActionInputField[];
+  // Computes the field changes this action makes to the record, from the
+  // current row and any inputFields. Without this, an action has nothing
+  // to write beyond an audit entry - the record never actually changes.
+  apply?: (
+    row: InferRow<TTable>,
+    inputFields?: Record<string, any>
+  ) => Partial<InferRow<TTable>>;
 }
 
 export interface FieldGroup {

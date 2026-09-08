@@ -12,12 +12,8 @@ async function setupTriggers() {
     join(__dirname, 'triggers.sql'),
     'utf-8'
   );
-  
-  // Use executeMultiple to run both trigger statements
-  const statements = triggerSql.split(';').filter(stmt => stmt.trim());
-  for (const stmt of statements) {
-    await client.execute(stmt);
-  }
+
+  await client.executeMultiple(triggerSql);
   console.log('Triggers setup successfully');
 }
 
