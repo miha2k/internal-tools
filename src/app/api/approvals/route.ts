@@ -1,41 +1,36 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db/client';
-import { approvals, users } from '@/lib/db/schema';
+import { approvals } from '@/lib/db/schema';
 import { getCurrentUser } from '@/lib/auth/server';
 import { assertCan } from '@/lib/auth/rbac';
 import { getAppBySlug } from '@/lib/registry';
+import { getAllUsers } from '@/lib/auth';
 import { eq, desc } from 'drizzle-orm';
 import { approveApproval, rejectApproval } from '@/lib/audit/approvals';
 
 export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
-    
-    // Get all pending approvals
+
+    // Get all pending approvals. requesterId is a session user id (from
+    // getCurrentUser/MOCK_USERS), not a row in the seeded `users` table -
+    // those are two unrelated identity lists that happen to share an id
+    // range, so resolve the display name from the same place logins do.
+    const allUsers = getAllUsers();
     const pendingApprovals = await db
-      .select({
-        id: approvals.id,
-        requesterId: approvals.requesterId,
-        app: approvals.app,
-        recordId: approvals.recordId,
-        action: approvals.action,
-        before: approvals.before,
-        after: approvals.after,
-        status: approvals.status,
-        createdAt: approvals.createdAt,
-        requesterName: users.name,
-      })
+      .select()
       .from(approvals)
-      .leftJoin(users, eq(approvals.requesterId, users.id))
       .where(eq(approvals.status, 'pending'))
       .orderBy(desc(approvals.createdAt));
 
     const approvalsWithDetails = await Promise.all(
       pendingApprovals.map(async (approval) => {
+        const requesterName = allUsers.find(u => u.id === approval.requesterId)?.name;
         const app = getAppBySlug(approval.app);
         if (!app) {
           return {
             ...approval,
+            requesterName,
             before: approval.before ? JSON.parse(approval.before as string) : null,
             after: approval.after ? JSON.parse(approval.after as string) : null,
           };
@@ -61,6 +56,7 @@ export async function GET(request: Request) {
 
         return {
           ...approval,
+          requesterName,
           before: maskPII(before),
           after: maskPII(after),
         };

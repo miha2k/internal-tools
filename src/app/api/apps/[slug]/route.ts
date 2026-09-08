@@ -160,6 +160,13 @@ export async function POST(
       requiresApproval = actionConfig.requiresApproval || false;
     }
 
+    // Compute what this action actually changes on the record. Without an
+    // `apply`, an action has nothing but inputFields to write - which is a
+    // no-op for actions like approve/reject/toggle that declare none.
+    const changes = actionConfig.apply
+      ? actionConfig.apply(record, inputFields)
+      : inputFields;
+
     if (requiresApproval) {
       // Create approval request
       const { createApproval } = await import('@/lib/audit/approvals');
@@ -169,7 +176,7 @@ export async function POST(
         recordId,
         action,
         before: record,
-        after: { ...record, ...inputFields },
+        after: { ...record, ...changes },
       }, user, request.headers.get('x-forwarded-for') || 'unknown');
       return NextResponse.json({ approvalId, requiresApproval: true });
     }
@@ -183,8 +190,8 @@ export async function POST(
         action,
         recordId,
         run: async (tx) => {
-          // Apply the input fields to the record
-          const updates = { ...record, ...inputFields };
+          // Apply the action's computed changes to the record
+          const updates = { ...record, ...changes };
           
           // @ts-ignore - dynamic table access
           await tx
