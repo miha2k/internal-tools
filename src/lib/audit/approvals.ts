@@ -29,7 +29,7 @@ export async function createApproval(
     {
       app: request.app,
       action: 'create_approval',
-      recordId: `approval-${Date.now()}`,
+      recordId: String(request.recordId),
       run: async (tx) => {
         const [result] = await tx.insert(approvals).values({
           requesterId: request.requesterId,
@@ -71,22 +71,22 @@ export async function approveApproval(
 ): Promise<void> {
   assertCan(approver, 'approve', app);
 
+  const [approval] = await db
+    .select()
+    .from(approvals)
+    .where(eq(approvals.id, approvalId));
+
+  if (!approval) {
+    throw new Error('Approval not found');
+  }
+
   await mutate(
     { user: approver, ip },
     {
       app: app.slug,
       action: 'approve',
-      recordId: approvalId,
+      recordId: approval.recordId,
       run: async (tx) => {
-        const [approval] = await tx
-          .select()
-          .from(approvals)
-          .where(eq(approvals.id, approvalId));
-
-        if (!approval) {
-          throw new Error('Approval not found');
-        }
-
         if (approval.status !== 'pending') {
           throw new Error('Approval is not pending');
         }
@@ -136,22 +136,22 @@ export async function rejectApproval(
 ): Promise<void> {
   assertCan(approver, 'approve', app);
 
+  const [approval] = await db
+    .select()
+    .from(approvals)
+    .where(eq(approvals.id, approvalId));
+
+  if (!approval) {
+    throw new Error('Approval not found');
+  }
+
   await mutate(
     { user: approver, ip },
     {
       app: app.slug,
       action: 'reject',
-      recordId: approvalId,
+      recordId: approval.recordId,
       run: async (tx) => {
-        const [approval] = await tx
-          .select()
-          .from(approvals)
-          .where(eq(approvals.id, approvalId));
-
-        if (!approval) {
-          throw new Error('Approval not found');
-        }
-
         if (approval.status !== 'pending') {
           throw new Error('Approval is not pending');
         }

@@ -101,7 +101,7 @@ export default function AppPage() {
       case 'currency':
         return `$${(value / 100).toFixed(2)}`;
       case 'enum':
-        const option = column.enumOptions?.find((opt: any) => opt.value === value);
+        const option = column.enumOptions?.find((opt: any) => opt.value === String(value));
         const classes = option ? toneClasses[option.tone] || toneClasses.neutral : null;
         return option ? (
           <Badge variant="outline" className={`${classes?.bg} ${classes?.text}`}>
@@ -155,7 +155,7 @@ export default function AppPage() {
         </div>
 
         {app.columns
-          .filter(col => col.filterable)
+          .filter(col => col.filterable && col.enumOptions)
           .map(column => (
             <select
               key={column.key as string}

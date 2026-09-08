@@ -32,6 +32,9 @@ export async function GET(
     // @ts-ignore - dynamic schema access
     let query = db.select().from(app.schema);
 
+    // Collect all conditions
+    const allConditions = [];
+
     // Apply search
     if (search) {
       const searchConditions = app.columns
@@ -42,25 +45,24 @@ export async function GET(
         });
       
       if (searchConditions.length > 0) {
-        query = query.where(or(...searchConditions));
+        allConditions.push(or(...searchConditions));
       }
     }
 
     // Apply filters
-    const filterConditions = [];
     app.columns.forEach(column => {
       if (column.filterable && searchParams.has(column.key as string)) {
         const value = searchParams.get(column.key as string);
         if (value) {
           // @ts-ignore - Drizzle typing is complex for dynamic conditions
-          filterConditions.push(eq(app.schema[column.key as keyof typeof app.schema] as any, value));
+          allConditions.push(eq(app.schema[column.key as keyof typeof app.schema] as any, value));
         }
       }
     });
 
-    if (filterConditions.length > 0) {
+    if (allConditions.length > 0) {
       // @ts-ignore - Drizzle typing is complex for dynamic conditions
-      query = query.where(and(...filterConditions));
+      query = query.where(and(...allConditions));
     }
 
     // Apply sorting

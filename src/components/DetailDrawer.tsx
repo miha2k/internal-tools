@@ -172,7 +172,7 @@ export function DetailDrawer({ open, onOpenChange, app, record }: DetailDrawerPr
       case 'date':
         return new Date(value).toLocaleString();
       case 'enum':
-        const option = column.enumOptions?.find(opt => opt.value === value);
+        const option = column.enumOptions?.find(opt => opt.value === String(value));
         const classes = option ? toneClasses[option.tone] || toneClasses.neutral : null;
         return option ? (
           <Badge variant="outline" className={`${classes?.bg} ${classes?.text}`}>
