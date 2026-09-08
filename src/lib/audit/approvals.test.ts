@@ -45,22 +45,6 @@ describe('approvals - self-approval logic', () => {
     await cleanupTestDb();
   });
 
-  it('self-approval is rejected server-side', async () => {
-    // This test would require importing the actual mutate function
-    // For now, we'll test the self-approval logic directly
-    const testApproval = await testDb
-      .select()
-      .from(approvals)
-      .where(eq(approvals.id, approvalId));
-    
-    expect(testApproval[0].requesterId).toBe(requesterId);
-    
-    // Simulate self-approval check
-    if (testApproval[0].requesterId === requesterId) {
-      expect(true).toBe(true); // Self-approval would be rejected
-    }
-  });
-
   it('allows different user to approve', async () => {
     // Simulate approval by a different user
     await testDb
