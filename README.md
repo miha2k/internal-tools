@@ -1,10 +1,26 @@
 # Internal Tools Platform
 
-A schema-driven internal tools platform built with Next.js 16, TypeScript, Tailwind, shadcn/ui, Drizzle ORM, and SQLite. The platform is designed to make adding new internal tools nearly free - each app is configuration, not code.
+A schema-driven internal tools platform built with Next.js 16, TypeScript, Tailwind, shadcn/ui, Drizzle ORM, and SQLite. Each app is a configuration file, not code, so adding a new internal tool is cheap.
+
+## Scope
+
+This prototype was built for a fintech evaluating whether to replace Microsoft Power Apps with an in-house internal-tools platform. It was deliberately time-boxed, and the scope was chosen to prove the core thesis - that the fourth, fifth, and tenth app are nearly free to add - rather than to be production-complete.
+
+In scope, and implemented:
+
+- Declarative `AppConfig` contract with three apps built on it (KYC Review, Refunds, Feature Flags)
+- Server-side RBAC, transactional audit logging, and an append-only `audit_log`
+- Maker-checker approvals with server-side self-approval rejection
+- PII masking with audited reveal
+- Audit timeline and role switcher for demoing the above
+- Unit tests for the security-critical paths, run in CI
+
+Out of scope by design - see [Known Limitations](#known-limitations) for the full list:
+
+- Real authentication, migrations, monitoring, and other production plumbing
+- UI polish beyond what the demo needs (pagination controls, input dialogs, before/after diffs)
 
 ## Architecture
-
-This is a proof of concept for a fintech evaluating whether to replace Microsoft Power Apps with an in-house internal-tools platform. The key principle is that the fourth, fifth, and tenth app are nearly free to add.
 
 ### Core Principles
 
@@ -26,13 +42,13 @@ This is a proof of concept for a fintech evaluating whether to replace Microsoft
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
+- Node.js 20.9+ (required by Next.js 16; CI uses Node 20)
+- npm (a `package-lock.json` is committed; CI installs with `npm ci --legacy-peer-deps`)
 
 ### Installation
 
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
 ### Database Setup
@@ -41,7 +57,7 @@ npm install
 npm run db:push
 ```
 
-This creates the database schema and sets up SQLite triggers for audit log append-only enforcement. The triggers are automatically created as part of the database push process.
+This pushes the Drizzle schema to a local SQLite file (`local.db`, gitignored) and then runs `src/lib/db/setup-triggers.ts`, which installs the SQLite triggers that make `audit_log` append-only.
 
 ### Seed Data
 
@@ -61,7 +77,15 @@ This seeds the database with:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the platform.
+Open [http://localhost:3000](http://localhost:3000). The home page is the Approvals queue; the three apps are in the sidebar. Use the user switcher in the sidebar to change the active role - no login is required.
+
+### Tests
+
+```bash
+npm run test:run
+```
+
+Unit tests (Vitest) cover RBAC, the `mutate()` chokepoint, approvals and self-approval rejection, the `requiresApproval` predicates, the append-only triggers, PII masking in the audit endpoint, and each app config. The same command runs on every pull request via GitHub Actions (`.github/workflows/test.yml`).
 
 ## AppConfig Contract
 
@@ -86,7 +110,7 @@ interface AppConfig<TTable extends SQLiteTable = any> {
 
 ### Current Apps
 
-The platform currently includes three production-ready apps:
+The platform includes three apps:
 
 1. **KYC Review** - Case management for customer verification reviews
 2. **Refunds** - Refund request processing with approval workflow
@@ -151,18 +175,21 @@ export const kycReviewApp: AppConfig<typeof kycReviews> = {
       label: 'Approve',
       variant: 'default',
       requiresApproval: true, // Maker-checker
+      apply: () => ({ status: 'approved' }),
     },
     {
       key: 'reject',
       label: 'Reject',
       variant: 'destructive',
       requiresApproval: true, // Maker-checker
+      apply: () => ({ status: 'rejected' }),
     },
     {
       key: 'escalate',
       label: 'Escalate',
       variant: 'secondary',
       requiresApproval: false,
+      apply: () => ({ status: 'escalated' }),
     },
   ],
   
@@ -201,7 +228,9 @@ export const kycReviewApp: AppConfig<typeof kycReviews> = {
 1. Create the database schema in `src/lib/db/schema.ts`
 2. Create the app config in `src/apps/<slug>.app.ts`
 3. Add the app to the registry in `src/lib/registry.ts`
-4. That's it! The app automatically appears in the sidebar and renders with full functionality
+4. Run `npm run db:push` to create the table
+
+The app then appears in the sidebar and gets the table view, detail drawer, row actions, approvals, PII masking, and audit timeline with no additional UI code.
 
 ## Security Features
 
@@ -245,25 +274,31 @@ Roles: `viewer`, `operator`, `approver`, `admin`
 
 ### Maker-Checker
 
-Actions can require approval based on predicates:
+Actions can require approval unconditionally or based on a predicate over the row:
 
 ```typescript
-requiresApproval: (row) => row.amount > 5000
+requiresApproval: true
+requiresApproval: (row) => row.amount > 500              // refunds over $5.00 (amounts are in cents)
+requiresApproval: (row) => row.environment === 'production' // feature flags
 ```
 
-Self-approval is rejected server-side, not just hidden in the UI.
+When approval is required, the action creates a pending `approvals` row instead of mutating the record. An approver applies or rejects it from the Approvals page. Self-approval is rejected server-side, not just hidden in the UI.
 
 ### PII Masking
 
-Columns marked as `pii: true` are masked by default with a reveal control that writes an audit log when unmasked.
+Columns marked as `pii: true` are masked (`••••••••`) in list responses, approval diffs, and audit entries. The detail drawer has a per-field reveal control that calls `/api/reveal-pii`, which checks the `reveal_pii` role and writes a `reveal_pii` audit row before returning the value.
 
 ## Scripts
 
 - `npm run dev` - Start development server
 - `npm run build` - Build for production
-- `npm run db:push` - Push schema changes to database
-- `npm run seed` - Seed database with test data
+- `npm run start` - Serve the production build
 - `npm run lint` - Run ESLint
+- `npm run test` - Run Vitest in watch mode
+- `npm run test:run` - Run the test suite once (used in CI)
+- `npm run db:push` - Push schema to `local.db` and install the audit triggers
+- `npm run db:studio` - Open Drizzle Studio to browse the database
+- `npm run seed` - Seed database with fake data
 
 ## Project Structure
 
@@ -299,46 +334,38 @@ src/
 - No real personal data - use @faker-js/faker for seed data
 - PII columns never reach logs, error messages, or console output
 
-## Constraints
-
-This is a two-hour proof of concept. When running long, cut scope rather than quality. Priority order:
-
-1. Audit timeline and role switcher (for demo)
-2. RBAC and security features
-3. Maker-checker workflow
-4. UI polish and empty states
-5. Advanced features (pagination, search)
-
 ## Known Limitations
 
-This is a proof-of-concept implementation with specific limitations:
+These are the gaps in the prototype as it stands. Each was verified against the current code.
 
-1. **TypeScript Strict Mode Disabled**: Build process uses `ignoreBuildErrors: true` to bypass TypeScript strict mode violations. Dynamic typing with Drizzle ORM creates type incompatibilities that require `@ts-ignore` comments throughout the codebase.
+1. **TypeScript strictness relaxed**: `tsconfig.json` has `strict: false` and `next.config.ts` sets `typescript.ignoreBuildErrors: true`. Driving Drizzle queries from a runtime `AppConfig` (dynamic table and column access) is hard to type, so the data layer uses `@ts-ignore` in a handful of places.
 
-2. **UI Input Fields Not Implemented**: Row actions with `inputFields` (like partial refund amount input) are not fully implemented in the UI. The API supports them, but there are no form dialogs for collecting user input.
+2. **No authentication**: The active user is a `user_id` cookie selected via the role switcher, resolved against a hard-coded `MOCK_USERS` list. Anyone can switch to `admin`. The seeded `users` table is unrelated to this list.
 
-3. **Limited Error Handling**: UI components lack comprehensive error handling for network failures, API errors, and edge cases. Toast notifications are basic and don't provide detailed error recovery options.
+3. **No input dialogs for `inputFields`**: The `partial_refund` action declares an `amount` input and the API accepts it, but the UI never prompts for it, so the action falls back to the row's existing amount.
 
-4. **No Loading States**: Row action execution and API calls don't show loading states, making the UI feel unresponsive during operations.
+4. **No confirmation for destructive actions**: The drawer checks `action.destructive`, which is not a field on `RowAction` (the type uses `variant: 'destructive'`). Destructive actions that don't require approval execute immediately.
 
-5. **Audit Timeline Limitations**: The audit timeline shows basic action history but doesn't display before/after diffs or detailed change information.
+5. **Audit timeline shows no diffs**: The `/audit` endpoint returns masked `before`/`after` JSON, but the timeline renders only action, actor, and timestamp.
 
-6. **No UI for Search and Pagination**: While the API supports search and pagination, the UI doesn't expose these controls to users.
+6. **No pagination controls**: The API accepts `page` and `limit`, but the UI always requests the first 50 rows. Search and per-column filters are exposed; search is a `LIKE` over `text` columns only.
 
-7. **No Responsive Design Testing**: The interface hasn't been tested across different screen sizes or devices.
+7. **Approvals apply a stale snapshot**: Approving writes the `after` object captured at request time, so it overwrites any changes made to the record in between. Nothing prevents multiple pending approvals for the same record.
 
-8. **No Accessibility Implementation**: No ARIA labels, keyboard navigation, or screen reader support has been implemented.
+8. **Bulk PII reveal via query parameter**: `GET /api/apps/<slug>?reveal_pii=true` returns unmasked rows (gated by the `reveal_pii` role) and writes one audit row per returned record. The UI does not use it; the per-field reveal in the drawer is the intended path.
 
-9. **No Integration Tests**: Only unit tests exist; there are no end-to-end or integration tests for complete user flows.
+9. **Coarse error handling**: API routes return generic 500s (approvals surface the error message; other routes do not), and the UI reports failures as a fixed "Action failed" toast. Successful direct actions refresh the page with `window.location.reload()`.
 
-10. **Database Schema Changes**: No migration strategy exists for schema changes. Manual database modifications are required.
+10. **Manual app registry**: New apps must be imported and listed in `src/lib/registry.ts`; there is no auto-discovery.
 
-11. **Limited App Config Expressiveness**: The AppConfig contract cannot express complex validation rules, computed fields, or cross-table relationships without code changes.
+11. **No migrations**: Schema changes go through `drizzle-kit push`; there are no versioned migration files. `triggers.sql` also contains `CREATE TABLE IF NOT EXISTS` statements that duplicate the Drizzle schema.
 
-12. **No Real Authentication**: The current authentication system is a mock implementation for demonstration purposes only.
+12. **Limited config expressiveness**: `AppConfig` cannot express validation rules, computed fields, or cross-table relationships without code changes. Column `type` is not derived from the schema (e.g. `riskScore` is declared as `text`).
 
-13. **No Backup Strategy**: No automated database backups or disaster recovery mechanism exists.
+13. **Booleans stored as integers**: SQLite has no boolean type, so `feature_flags.enabled` is `0`/`1` and the UI maps it back when rendering.
 
-14. **No Monitoring**: No application performance monitoring, error tracking, or logging infrastructure.
+14. **Unit tests only**: 20 Vitest tests cover the security-critical paths; there are no end-to-end or browser tests, and the UI is untested.
 
-15. **Feature Flags Boolean Handling**: SQLite doesn't have native boolean support, so feature flags use integer 0/1 storage with enum mapping, which adds complexity.
+15. **Not audited for accessibility or responsiveness**: Interactive primitives come from shadcn/ui (Base UI) and carry their defaults, but no accessibility or multi-viewport review has been done.
+
+16. **No production plumbing**: No monitoring, error tracking, or backup strategy.
